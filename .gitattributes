@@ -1,0 +1,6 @@
+# Preserve the uploaded originals byte for byte, including Cache CRLF.
+FreshWayGateway.cs -text
+gateway.ini -text
+%zprd11.txt -text
+*.pdf binary
+*.md text eol=lf

@@ -1,0 +1,442 @@
+%zprd11 ;; MTA FreshWay   'IS-MB'   'cs=119'   '000000-140225-09:14'
+ ;; MTA#1\MTA FreshWay Receipt printer
+ ;; MTA#2\MTA FreshWay Label printer
+ ;; MTA#3\MTA FreshWay Linerless printer
+ q
+ 
+Init
+ s %prnServer=$g(@$p(%prd,%d,5)@("Server")),%prnPort=$p(%prd,%d,3)
+ i '$g(%zprd11) d  q:%e
+ . i '$g(%zprd11("open")),$$callWS("/pos/p_open/",$case($p(%prd,%d,2),"MTA#2":"LabelPrinter-1","MTA#3":"LinerlessPrinter-1",:"ReceiptPrinter-1"))'="OK" d  q:%e
+ ..  d Close,close
+ ..  i $$callWS("/pos/p_open/",$case($p(%prd,%d,2),"MTA#2":"LabelPrinter-1","MTA#3":"LinerlessPrinter-1",:"ReceiptPrinter-1"))'="OK" d err^%z(2,"no connection")
+ . s %zprd11=1 d callWS("/pos/p_claim/",10)
+ . d callWS("/pos/p_enable/","true")
+ d callWS("/pos/p_setproperty/","CharacterSet/1252")  ; to support to EURO sign
+ d:$$getcap("CapTransaction") callWS("/pos/p_transactionprint/","2/11")
+ s lineh=$$callWS("/pos/p_getproperty/","RecLineHeight")*.125 s:'lineh lineh=2 ; is returned in dots -> converted to mm
+ s chars=$p($$callWS("/pos/p_getproperty/","RecLineChars"),$c(9)) s:'chars chars=56
+ s pagmod=$$getcap("CapRecPageMode")
+ s tmar=$s($g(%prd(1))'="":$g(@%prd(1)@("ppt","topmargin"),0)-(18*'pagmod),1:0) i 'pagmod,tmar>0,$g(@%prd(1)@("ppt","orientation"))'=2 d
+ . k par s par(1)=2,par(2)=$c(27)_"|"_(tmar*$s(pagmod:100,1:8))_"uF"_$s(pagmod:"",1:$c(10))
+ . d callWS("/pos/p_printnormal/",par(1)_"/"_$$encode(par(2)))
+ s pagew=$s($g(%prd(1))'="":$g(@%prd(1)@("ppt","width")),1:0) s:'pagew pagew=80
+ i pagmod d
+ . d callWS("/pos/p_setproperty/","PageModeStation/2"),callWS("/pos/p_setproperty/","MapMode/4")
+ . d callWS("/pos/p_setproperty/","PageModePrintDirection/1") s pagew=$p($$callWS("/pos/p_getproperty/","PageModeArea"),$c(9))
+ k %zprd11("fonts") s %zprd11("fonts")=$p($$callWS("/pos/p_getproperty/","FontTypefaceList"),$c(9)) f i=1:1:$l(%zprd11("fonts"),",") s:$p(%zprd11("fonts"),",",i)'="" %zprd11("fonts",$p(%zprd11("fonts"),",",i))=i-1 ; starts with 0
+ i $p(%prd,%d,2)="MTA#2",$g(@$p(%prd,%d,5)@("Label"),2)=0 i $g(%prd(1))'="" d cptheight(%prd(1))
+ i $g(%prnSensor) k %prnSensor q
+ ; continue Init (from %zprd6)
+ n rot,tmar,zh d:$p($p(%prd,%d,2),"#",2) func("select",+$p($p(%prd,%d,2),"#",2))
+ i $g(@$p(%prd,%d,5)@("Label"),2)=0,'$g(@$p(%prd,%d,5)@("Calibr")) s @$p(%prd,%d,5)@("Calibr")=$$func("calibrate")
+ d func("init",$g(@$p(%prd,%d,5)@("Label"),2))
+ i $$lc^%z($$callWS("/pos/p_islowstock/"))="true" d err^%z(2,"paper with low stock") q
+ i $g(@$p(%prd,%d,5)@("Label"),2)=0,$g(@$p(%prd,%d,5)@("Waits")) d  q:%e
+ . s zh=$zh f  q:$$lc^%z($$func("readsens"))="false"  i $g(@$p(%prd,%d,5)@("WaitTO"))'="",$zh-zh>@$p(%prd,%d,5)@("WaitTO") d err^%z(2,"time-out wait for take off label") q  ; wait for taking off label
+ s (rot,tmar)=0
+ i $g(%prd(1))'="" d
+ . s rot=$g(@%prd(1)@("ppt","orientation")) ; rotation = 0 : 0 ; 1 = 90 ; -1 = -90 ; 2 = 180
+ . s tmar=$g(@%prd(1)@("ppt",$s(rot=1:"left",1:"top")_"margin"),0)-13
+ i tmar>0 d func("feed",tmar*8)
+ i $g(@$p(%prd,%d,5)@("NewInt")) d func("intens",$g(@$p(%prd,%d,5)@("Intens"),4)) k @$p(%prd,%d,5)@("NewInt")
+ q
+ 
+Print
+ n aln,attr,bctype,bor,bw,c,chrs,cpt,cptord,fil,font,g,glo,h,i,key,labprn,len,line,linec,lines,lmar,lp,par,pos,rot,rppt,siz,str,sub,txt,type,val,w,x,xpos,xywh,y
+ s labprn=($p(%prd,%d,2)="MTA#2")&(%band'="DET01") s:$g(@$p(%prd,%d,5)@("Label"),2)'=0 labprn=0
+ s glo=%prd(2),lmar=$g(@%prd(1)@("ppt","leftmargin"),4)-4 s:lmar<0 lmar=0 i '$d(@glo@("cpt")) d  q
+ . q:'labprn  q:'pagmod
+ . i '$$nextbnd(Bandnr) d callWS("/pos/p_pagemodeprint/","3") i %r d err^%z(3,$s($p(%r,$c(9))=111:"label not printed",1:"unknown error")) q  ; test on result MT
+ s lines=@glo@("ppt","heightinunits")\lineh,rot=$g(@%prd(1)@("ppt","orientation")) f i=0:1:lines-1 s cptord(i)=""
+ s cpt="" f  s cpt=$o(@glo@("cpt",cpt)) q:cpt=""  s key=$g(^(cpt,"ppt","xywhinunits")) d:key'=""
+ . s line=$p(key,",",2)\lineh
+ . f  q:'$d(cptord(line,$p(key,",")))  s $p(key,",")=$p(key,",")+.00001
+ . s cptord(line,$p(key,","))=cpt
+ . s type=$g(@glo@("cpt",cpt,"ppt","%type")) q:"\barcode\image\"'[(%d_type_%d)
+ . f i=1:1:($p(key,",",4)\lineh) k:$d(cptord(line+i))<9 cptord(line+i) ; kill lines of height
+ i 'labprn d:pagmod callWS("/pos/p_pagemodeprint/",1)
+ i rot,'labprn d
+ . i rot=-1 d:$$getcap("CapRecLeft90") callWS("/pos/p_rotateprint/","2/258"),callWS("/pos/p_setproperty/","RotateSpecial/258") q  ; NOT SUPPORTED BY MT
+ . i rot=1 d:$$getcap("CapRecRight90") callWS("/pos/p_rotateprint/","2/257"),callWS("/pos/p_setproperty/","RotateSpecial/257") q  ; NOT SUPPORTED BY MT
+ . i rot=2 d:$$getcap("CapRecRotate180") callWS("/pos/p_rotateprint/","2/259"),callWS("/pos/p_setproperty/","RotateSpecial/259") q
+ s (xpos,line,pos)="" f  s line=$o(cptord(line),$s(rot=2:1,1:1)) q:line=""  d
+ . s str="",(len,lsub)=0,lp=pagmod f  s xpos=$o(cptord(line,xpos),$s(rot=2:1,1:1),cpts) q:xpos=""  f c=1:1:$l(cpts,%d) s cpt=$p(cpts,%d,c) d
+ ..  k rppt m rppt=@glo@("cpt",cpt,"ppt")
+ ..  i $d(rppt("enabled")),'rppt("enabled") q
+ ..  s type=rppt("%type"),txt=$g(rppt("value")),xywh=$g(rppt("xywhinunits"))
+ ..  s x=$p(xywh,","),w=$p(xywh,",",3),font=$g(rppt("font")) s:w>pagew w=pagew
+ ..  i pagmod,rot=2 d
+ ...   s $p(xywh,",")=($p(pagew,",")/100)-$p(xywh,",")-$p(xywh,",",3)-lmar s:$p(xywh,",")<0 $p(xywh,",")=0 s x=$p(xywh,","),lmar=0
+ ...   s $p(xywh,",",2)=@glo@("ppt","heightinunits")-$p(xywh,",",2)-$p(xywh,",",4)-$s(tmar>0:tmar,1:0)
+ ...   i txt[$c(13) d
+ ....    i $e(txt,$l(txt))=$c(13) s txt=$e(txt,1,$l(txt)-1)
+ ....    ; n i,part,str2
+ ....    ; s str2="" f i=$l(txt,$c(13)):1:1 s part=$p(txt,$c(13),i) s:part'="" str2=str2_$e($c(13),str2'="")_$p(txt,$c(13),i)
+ ....    ; s txt=str2
+ ..  i "\label\document\"[(%d_type_%d) d:w  q
+ ...   i pagmod d  q
+ ....    s x=x+(lmar*100)
+ ....    i (x+w*100)>$p(pagew,",") s w=($p(pagew,",")-(x*100)/100) ; rot'=2,
+ ....    i 0,rot=2,w*100>$p(pagew,",") s (w,$p(xywh,",",3))=$p(pagew,",")/100,(x,$p(xywh,","))=0
+ ....    i $$getcap("CapRecRuledLine"),$g(rppt("drawtopborder")) d
+ .....     s bw=$j($g(rppt("borderwidth"),1),0,0) q:'bw
+ .....     k par s par(1)="PageModePrintArea",par(2)=(x*100)_","_($p(xywh,",",2)*100)_","_(w*100)_","_(bw*100) ;$s(rot=2:$p(xywh,",",2)+$p(xywh,",",4)*100,1:
+ .....     d callWS("/pos/p_setproperty/",par(1)_"/"_$$encode(par(2)))
+ .....     k par s par(1)=2,par(2)=(x*100)_","_(w*100),par(3)=1,par(4)=bw,par(5)=1,par(6)=0
+ .....     d callWS("/pos/p_drawruledline/",par(1)_"/"_par(2)_"/"_par(3)_"/"_par(4)_"/"_par(5)_"/"_par(6))
+ .....     d callWS("/pos/p_setproperty/","PageModeVerticalPosition/50")
+ ....    i txt'="" d
+ .....     k par s par(1)="PageModePrintArea",par(2)=(x*100)_","_($p(xywh,",",2)*100)_","_(w*100)_","_($p(xywh,",",4)*100)
+ .....     d callWS("/pos/p_setproperty/",par(1)_"/"_$$encode(par(2)))
+ .....     k par s par(1)=2,par(2)=$$format(txt,$p(font,","),$p(font,",",2),$p(font,",",3),$g(rppt("alignment")))_$c(13) ; $s(rot=2&$g(rppt("alignment")):rppt("alignment")#2+1,1:
+ .....     d callWS("/pos/p_printnormal/",par(1)_"/"_$$encode($tr(par(2),"/",$c(1))))
+ .....     s:pos<($p(xywh,",",2)+$p(xywh,",",4)*100) pos=($p(xywh,",",2)+$p(xywh,",",4)*100)
+ ....    i $$getcap("CapRecRuledLine"),$g(rppt("drawbottomborder")) d
+ .....     s bw=$j($g(rppt("borderwidth"),1),0,0) q:'bw
+ .....     k par s par(1)="PageModePrintArea",par(2)=(x*100)_","_($p(xywh,",",2)+$p(xywh,",",4)*100)_","_(w*100)_","_(bw*100) ;$s(rot=2:$p(xywh,",",2)*100,1:
+ .....     d callWS("/pos/p_setproperty/",par(1)_"/"_$$encode(par(2)))
+ .....     k par s par(1)=2,par(2)=(x*100)_","_(w*100),par(3)=1,par(4)=bw,par(5)=1,par(6)=0
+ .....     d callWS("/pos/p_drawruledline/",par(1)_"/"_par(2)_"/"_par(3)_"/"_par(4)_"/"_par(5)_"/"_par(6))
+ ...   q:txt=""  s siz=$s($p(font,",",2)>15:4,$p(font,",",2)>11:3,$p(font,",",2)>8:2,1:1)
+ ...   s linec=chars\(1*'(siz#2)+1)-$s(chars=53:1,1:0)
+ ...   s pos=$s(x:$j(linec/(pagew/x),0,0),1:1),chrs=$j(linec/(pagew/w),0,0) s:'pos pos=1
+ ...   s sub=$e(txt,1,chrs),siz=$c(27)_"|"_siz_"C"
+ ...   s attr=$s($p(font,",",3)["bold":$c(27)_"|bC",1:"")_$s($p(font,",",3)["italic":$c(27)_"|iC",1:"")_$s($p(font,",",3)["underline":$c(27)_"|2uC",1:"")
+ ...   s sub=$$justify(sub,chrs,$g(rppt("alignment"))),lsub=lsub+$l(sub)
+ ...   s:$p(font,",",3)["underline" sub=$p(sub,$ZSTRIP(sub,"<W"))_attr_$ZSTRIP(sub,"<>W")_$c(27)_"|N"_$p(sub,$ZSTRIP(sub,">W"),2)
+ ...   s:$p(font,",",3)'["underline" sub=siz_attr_sub
+ ...   s:pos<len pos=len+1
+ ...   s $e(str,$l(str)+pos-len)=sub,len=pos+chrs
+ ..  i type="barcode" d  q
+ ...   s val=$g(rppt("value")) q:val=""
+ ...   s bctype=$$lc^%z($g(rppt("type")))
+ ...   s val=$s(bctype="ean"&("\8\13\"[(%d_$l(val)_%d)):$e(val,1,$l(val)-1),bctype="ean13"&($l(val)=13):$e(val,1,12),bctype="ean8"&($l(val)=8):$e(val,1,7),1:val)
+ ...   s bctype=$s(bctype="ean":$p("103\103\\\\104\104",%d,$l(val)-6),bctype="ean13":104,bctype="ean8":103,bctype="upc10":101,bctype="code39":108,bctype="ean128":110,1:"")
+ ...   q:val=""  q:bctype=""
+ ...   f i=1:1:4 s @$e("xywh",i)=i=1*lmar+$p(xywh,",",i)*$s('pagmod:8,1:100)\1
+ ...   s aln=-2 ; $s(x/8<(pagew/3):-1,x/8>(pagew*2/3):-3,1:-2)
+ ...   i pagmod d
+ ....    s:pos<($p(xywh,",",2)+$p(xywh,",",4)*100) pos=($p(xywh,",",2)+$p(xywh,",",4)*100)
+ ....    k par s par(1)="PageModePrintArea",par(2)=x_","_y_","_w_","_h
+ ....    d callWS("/pos/p_setproperty/",par(1)_"/"_$$encode(par(2)))
+ ...   k par s par(1)=2,par(2)=val,par(3)=bctype,par(4)=h,par(5)=w,par(6)=aln,par(7)=$s($g(rppt("showtext")):-13,1:-11)
+ ...   d callWS("/pos/p_printbarcode/",par(1)_"/"_par(2)_"/"_par(3)_"/"_par(4)_"/"_par(5)_"/"_par(6)_"/"_par(7)) s lp=1
+ ..  i type="image" d:rppt("image")'=""  q
+ ...   f i=1:1:4 s @$e("xywh",i)=i=1*lmar+$p(xywh,",",i)*$s('pagmod:8,1:100)\1
+ ...   s g=$p(%prd,%d,5),g=$na(@g@("images",1,rppt("image"),x_%d_w))
+ ...   d  q:'$d(@g)
+ ....    s fil=$$getima(rppt("image"),"bmp",x,w) q:fil=""
+ ....    k par s par(1)=$p(@g,%d),par(2)=2,par(3)=fil,par(4)=w,par(5)=$s(x/8<(pagew/3):-1,x/8>(pagew*2/3):-3,1:-2)
+ ....    d callWS("/pos/p_setbitmap/",par(1)_"/"_par(2)_"/"_$$encode(par(3))_"/"_par(4)_"/"_par(5)) i %r k @$na(@g,3)@(0,@g),@g i %r=114 d callWS("/pos/p_getproperty/","ResultCodeExtended")
+ ....    d ##class(%File).Delete(fil)
+ ...   i pagmod k par s par(1)="PageModePrintArea",par(2)=x_","_y_","_w_","_h d callWS("/pos/p_setproperty/",par(1)_"/"_$$encode(par(2)))
+ ...   k par s par(1)=2,par(2)=$c(27)_"|"_$p(@g,%d)_"B"_$c(10)
+ ...   d callWS("/pos/p_printnormal/",par(1)_"/"_$$encode(par(2)))
+ . q:lp
+ . i $g(@glo@("ppt","drawbottomborder")),$o(cptord(line))="" s str=$c(27)_"|2uC"_str_$j("",chars-len)
+ . k par s par(1)=2,par(2)=" "_$tr(str,",",$c(44))_$c(10) ; escape ,
+ . d callWS("/pos/p_printnormal/",par(1)_"/"_$$encode(par(2)))
+ q:'pagmod
+ i '$$nextbnd(Bandnr) d callWS("/pos/p_pagemodeprint/","3") i %r d err^%z(3,$s($p(%r,$c(9))=111:"label not printed",1:"unknown error")) q  ; test on result MT
+ ; after print mode on labels, treats it as a new label ; MT
+ i $g(@$p(%prd,%d,5)@("Label"),2),$g(@glo@("ppt","heightinunits"))*100>pos d
+ . k par s par(1)=2,par(2)=$c(27)_"|"_($g(@glo@("ppt","heightinunits"))*100-pos)_"uF" d callWS("/pos/p_printnormal/",par(1)_"/"_$$encode(par(2)))
+ q
+ 
+Close q:'$g(%zprd11)
+ n cut,cutmode,par
+ s cut=$g(@%prd(1)@("ppt","cutafterprint")),cutmode="" s:cut cut=$$getcap("CapRecPaperCut")
+ s cutmode=$g(@$p(%prd,%d,5)@("Cutmode"),2)
+ ; after print mode on labels, treats it as a new label ; MT
+ i $g(@$p(%prd,%d,5)@("Label"),2) d
+ . k par s par(1)=2,par(2)=$c(27)_"|"_$j($s(pagmod:800,cut:30,1:19)+($g(@%prd(1)@("ppt",$s($g(@%prd(1)@("ppt","orientation"))=2:"topmargin",1:"bottommargin")))*$s(pagmod:100,1:8)),0,0)_"uF"_$s(pagmod:"",1:$c(10))
+ . d callWS("/pos/p_printnormal/",par(1)_"/"_$$encode(par(2)))
+ d:cut callWS("/pos/p_cutpaper/",$s(cutmode=1:75,1:cutmode*50))
+ d:$$getcap("CapTransaction") callWS("/pos/p_transactionprint/","2/12")
+ d callWS("/pos/p_setproperty/","DeviceEnabled/0")
+ f i=1:1 q:$p($$callWS("/pos/p_getproperty/","state"),$c(9))'=3  q:i>1000
+ d callWS("/pos/p_release")
+ q
+ 
+close s %zprd11=0 d:'$g(%zprd11("open")) callWS("/pos/p_close") q
+ 
+Feed(mm) ; <= %zprd
+ d Init
+ d func("select",+$p($p(%prd,%d,2),"#",2))
+ d func("init",$g(@$p(%prd,%d,5)@("Label"),2))
+ d func("feed",$$mm^%zprd6(+$g(mm),20,200))
+ q 1
+ 
+Sensor ; <= %zprd
+ s %prnSensor=1 d Init q:$g(@$p(%prd,%d,5)@("Label"),2)
+ d func("select",+$p($p(%prd,%d,2),"#",2))
+ d func("init",$g(@$p(%prd,%d,5)@("Label"),2))
+ d func("calibrate")
+ q
+ 
+Readsensor()
+ s %prnSensor=1 d Init q:$g(@$p(%prd,%d,5)@("Label"),2) ""
+ d func("select",+$p($p(%prd,%d,2),"#",2))
+ d func("init",$g(@$p(%prd,%d,5)@("Label"),2))
+ q $$lc^%z($$func("readsens"))
+ 
+ ; == public functions ==============================================================================================
+ 
+func(cmd,par1,par2,par3,par4,par5)
+ i cmd="180" d callWS("/pos/p_rotateprint/","2/"_$s(par1:259,1:1)) q
+ i cmd="calibrate" d callWS("/pos/p_autocalibratesensors/") s %r=1 q 1  ;d dirio("AUTOCALIBRATESENSORS"),func("feed") s %r=1 q 1
+ i cmd="feed" s par1="var" d dirio("FEEDFORWARD",par1) q
+ i cmd="gotoxy" n par s par(1)="PageModePrintArea",par(2)=par1_","_par2_",600,100" d callWS("/pos/p_setproperty/",par(1)_"/"_$$encode(par(2))) q
+ i cmd="init" d dirio("SETMODE",''par1) q
+ i cmd="intens" d dirio("SETCONTRAST",''par1) q
+ i cmd="print" d callWS("/pos/p_pagemodeprint/","2") q
+ i cmd="readsens" q $$callWS("/pos/p_islabelatprinter/")  ; new
+ ;. ; works only since sdpopos.dll version 2.2 07072014
+ ;. n pos,tak s par1="var",pos=$p($$dirio("ISPAPERATPOSSENSOR",par1),%df,3),tak=$p($$dirio("ISPAPERATTAKESENSOR",par1),%df,3) s %r=$s(pos&'tak:0,pos&tak:1,'pos&'tak:2,'pos&tak:3,1:0)
+ i cmd="rott" d callWS("/pos/p_rotateprint/","2/"_$s(par1=90:257,par1=-90:258,1:1)) q
+ i cmd="select" d dirio("SELECTPRINTER",'(par1-1)) q
+ i cmd="text" d callWS("/pos/p_printnormal/","2/"_$$encode(par(1)))
+ q %r
+ 
+dirio(cmd,par1)
+ s cmd=$$getcmd(cmd) q:cmd="" ""
+ q $$callWS("/pos/p_directio/",cmd_"/0"_$e("/",$g(par1)'="")_$g(par1))
+ 
+getcmd(cmd)
+ q:cmd="SELECTPRINTER" 100
+ q:cmd="SETSPEED" 101
+ q:cmd="SETCONTRAST" 102
+ q:cmd="SETSTEPMOTORDIRECTION" 103
+ q:cmd="SETTAKEUPMOTORDIRECTION" 104
+ q:cmd="SETPAPEROFFSET" 105  // backup label/continuous mode
+ q:cmd="SETLABELLENGTH" 106
+ q:cmd="SETGAPLENGTH" 107
+ q:cmd="SETTAKELABELSENSING" 108
+ q:cmd="SETLOWSTOCKSENSING" 109
+ q:cmd="SETPOSSENSORDISTANCE" 110
+ q:cmd="SETPOSSENSORINTENSITY" 111
+ q:cmd="SETPOSSENSORTHRESHOLD" 112
+ q:cmd="SETTAKESENSORTHRESHOLD" 113
+ q:cmd="SETBACKUPFUNCTION" 114  // backupmode for label/continuous mode
+ q:cmd="SETMOTORFUNCTIONS" 115
+ q:cmd="SETMODE" 116
+ 
+ q:cmd="GETSWFIRMWAREID" 200
+ q:cmd="GETSWFIRMWAREVERSION" 201  // printer firmware version
+ q:cmd="GETSWFIRMWARECOUNTRY" 202
+ q:cmd="GETPRINTERVERSIONID" 203  // printer version
+ q:cmd="GETSPEED" 204
+ q:cmd="GETCONTRAST" 205
+ q:cmd="GETLABELLENGTH" 206
+ q:cmd="GETGAPLENGTH" 207
+ q:cmd="GETPRINTERARTICLENUMBER" 208
+ q:cmd="GETPRINTERSERIALNUMBER" 209
+ q:cmd="GETELECTRONICSPARTNUMBER" 210
+ q:cmd="GETELECTRONICSREVISION" 211
+ q:cmd="GETELECTRONICSPRODDATE" 212
+ q:cmd="GETLABELCOUNTER" 213
+ q:cmd="GETRECEIPTCOUNTER" 214
+ q:cmd="GETPAPEROFFSET" 215
+ q:cmd="GETPOSSENSORTOPRINTHEADDISTANCE" 216
+ q:cmd="GETPOSSENSORINTENSITY" 217
+ q:cmd="GETPOSSENSORTHRESHOLD" 218
+ q:cmd="GETTAKELABELSENSORTHRESHOLD" 219
+ q:cmd="GETTOLERANCE" 220
+ q:cmd="GETPRINTERMODEL" 221
+ 
+ q:cmd="ISPAPERATPOSSENSOR" 300
+ q:cmd="ISPAPERATTAKESENSOR" 301
+ q:cmd="ISPRINTING" 302
+ q:cmd="ISLOWSTOCK" 303
+ q:cmd="ISPRINTHEADHOT" 304
+ q:cmd="ISTAKESENSORENABLED" 305
+ q:cmd="ISLOWSTOCKSENSORENABLED" 306
+ q:cmd="ISTAKEUPMOTORENABLED" 307
+ q:cmd="ISBACKUPENABLED" 308
+ q:cmd="ISSLIDOUTOFENCLOSURE" 309
+ 
+ q:cmd="AUTOCALIBRATESENSORS" 400
+ q:cmd="RESETLABELCOUNTER" 401
+ q:cmd="RESETRECEIPTCOUNTER" 402
+ q:cmd="CALIBRATEPOSSENSOR" 403
+ q:cmd="CALIBRATEPOSSENSORWITHRECEIPT" 404
+ q:cmd="CALIBRATEPOSTAKESENSOR" 405
+ q:cmd="CALIBRATEPOSTAKESENSORWITHRECEIPT" 406
+ q:cmd="FEEDFORWARD" 407
+ 
+ q:cmd="PRINTTESTLABEL" 500
+ q:cmd="UPLOADFIRMWARE" 600
+ q:cmd="GETDLLVERSION" 601
+ 
+ // legacy label support
+ q:cmd="STARTLABEL" 700
+ q:cmd="GETIDLIST" 701
+ q:cmd="SETID" 702
+ q:cmd="PRINTLABEL" 703
+ q:cmd="RESETLABEL" 704
+ q ""
+ 
+ ; == private functions =============================================================================================
+ 
+format(str,font,siz,fmt,aln)
+ s:$g(aln)'="" str=$c(27)_"|"_$e("clr",aln+1)_"A"_str
+ i $g(%zprd11("fonts",font_" "_siz)) s str=$c(27)_"|"_%zprd11("fonts",font_" "_siz)_"fT"_str,siz="" ; _$c(27)_"|0fT" is not allowed by Mettler and alignment should be first
+ i fmt["bold",$$getcap("CapRecBold") s str=$c(27)_"|bC"_str_$c(27)_"|!bC"
+ i fmt["italic",$$getcap("CapRecItalic") s str=$c(27)_"|iC"_str_$c(27)_"|!iC"
+ i fmt["underline",$$getcap("CapRecUnderline") s str=$c(27)_"|2uC"_str_$c(27)_"|!uC"
+ s:$g(siz)'="" siz=$s(siz>15:4,siz>11:3,siz>8:2,1:1),str=$c(27)_"|"_siz_"C"_str
+ q str
+ 
+getcap(cap) ; get printer capabilities
+ q:$g(cap)="" "" q:cap="CapRecRuledLine" 1 ; workaround for Mettler
+ i '$d(%zprd11("cap",cap)) d
+ . n res s res=$p($$callWS("/pos/p_getproperty/",cap),$c(9))
+ . s %zprd11("cap",cap)=$case(res,"false":0,"true":1,:res)
+ q %zprd11("cap",cap)
+ 
+getima(global,extension,x,w)
+ n cmd,fil,file,glo,nr,zip,zipped,i
+ s i=$o(@global@(0)) q:i="" ""
+ s zipped=$e(@global@(i),1,2)=$c(31,139)
+ s file=##class(%FileBinaryStream).%New()
+ s zip=$$^%z("%file.path","sdp")_"tmpx"_$j_".z"
+ s fil=$tr($p(zip,"/",1,$l(zip,"/")-1)_"/tmp00000."_extension,"/","\")
+ s file.Filename=$s(zipped:zip,1:fil)
+ s i=0 f  s i=$o(@global@(i),1,val) q:i=""  d file.Write(val)
+ d file.SaveStream()
+ i zipped,'##class(%File).Exists(zip) q ""
+ d:zipped unzip(zip,fil),##class(%File).Delete(zip)
+ q:'##class(%File).Exists(fil) ""
+ ; test on file size for MT
+ s file=##class(%File).%New(fil)
+ i 'file.Size d ^%z("%sys.hang",.5) q:'file.Size ""
+ s glo=$p(%prd,%d,5),glo=$na(@glo@("images"))
+ s nr=$o(@glo@(0,""),-1)+1 i nr>20 s nr=1 k @glo
+ k:$g(@glo@(0,nr))'="" @glo@(1,@glo@(0,nr))
+ s @glo@(0,nr)=global,@glo@(1,global,x_%d_w)=nr
+ d callWS("/pos/p_setbitmap/",nr_"/2")
+ q fil
+ 
+justify(str,len,aln)
+ q:1[$g(aln) str_$j("",len-$l(str))
+ q:aln=2 $j("",len-$l(str))_str
+ s len=len-$l(str)\2
+ q $j("",len)_str_$j("",len)
+ 
+encode(str) n str2 s str2=$tr(str,$c(128),$c(0))
+ s str2=$zcvt(str,"O","UTF8"),str2=$tr(str2,$c(0,47),$c(128,1))
+ q $$new^%z("%str.replace",$zcvt(str2,"O","URL"),"string=%C2%80\modify=%E2%82%AC")  ; encode url
+ 
+ ; == private labels ===============================================================================================
+ 
+fire(dev)
+ q:dev=""
+ d callWS("/drawer/d_open/","MTCashdrawer")
+ d callWS("/drawer/d_claim/",5)
+ d callWS("/drawer/enable/","true")
+ d callWS("/drawer/d_opendrawer")
+ d callWS("/drawer/d_setproperty/","DeviceEnabled/0")
+ d callWS("/drawer/d_release")
+ d callWS("/drawer/d_close")
+ q
+ 
+unzip(file,rename)
+ s cmd=$SYSTEM.Util.InstallDirectory()
+ s:$e($re(cmd))'="\" cmd=cmd_"\" s cmd=cmd_"gzip.exe"
+ q:'##class(%File).Exists(cmd) 1
+ s cmd=cmd_" -"_$e("c",rename'="")_"dqf "_$tr(file,"/","\")_$s(rename'="":" > "_$tr(rename,"/","\"),1:"")
+ s r=$zf(-1,cmd)
+ q r
+ 
+ ; == job (used to avoid memory problems)
+ 
+jstart()
+ q:$$^%z("%pgm.getpar","%zprd","par=opos splan\app=sdp") 0
+ i $j[":",$p($j,":",2)'=^%zsit("hst",0) q 0
+ l +^%zprd11("job"):.1 e  q 1
+ l -^%zprd11("job")
+ d ^%z("%sys.job","%zprd11","label=job")
+ q 1
+ 
+job
+ l +^%zprd11("job")
+ d ini^%z ;,defdll
+jloop
+ s cmd=$$r2() d:cmd'=""
+ . s x=$tr($zf(-3,$p(cmd,%d),"do",$p(cmd,%d,2),$p(cmd,%d,3,99)),$c(255),$c(0))
+ . s r="" f i=1:1:x s r=r_$zf(-3,$p(cmd,%d),"r",i,1)
+ . d w1(r)
+ s:$p(cmd,%d,2)="p_close" ^%zprd11("job")=$g(^%zprd11("job"))+1
+ i $g(^%zprd11("job"))=30 l -^%zprd11("job") k ^%zprd11("job") q
+ g jloop
+ 
+w1(str) o 225 u 225 w str c 225 q
+r1() o 224 u 224 r %r c 224 q %r
+w2(str) o 227 u 227 w str c 227 q
+r2() o 226 u 226 r %r c 226 q %r
+ 
+jobrun(dll,fun,args)
+ d w2(dll_%d_fun_%d_args)
+ q $$r1()
+ 
+nextbnd(band) i '($p(%prd,%d,2)="MTA#2"&($g(@$p(%prd,%d,5)@("Label"),2)=0)) q 0
+ i $$next^%zrlayo(band)'="nextband" q 1
+ q 0
+ 
+cptheight(glay) ; MTA Label - cheating to print all bands as one
+ n first,band,height,cpt,cpty,bheight q:$g(%band)=""
+ s (band,first)=%band,height=$g(@glay@("bnd",first,"ppt","heightinunits"))
+ f  s band=$o(@glay@("bnd",band)) q:band=""  s bheight=$g(@glay@("bnd",band,"ppt","heightinunits")) d:$o(@glay@("bnd",band,"cpt",""))'=""
+ . s cpt="" f  s cpt=$o(@glay@("bnd",band,"cpt",cpt)) q:cpt=""  d
+ ..  s cpty=$p($g(@glay@("bnd",band,"cpt",cpt,"ppt","xywhinunits")),",",2)
+ ..  s $p(@glay@("bnd",band,"cpt",cpt,"ppt","xywhinunits"),",",2)=cpty+height
+ . s height=height+bheight
+ q
+ 
+ ; == setup screen (in %zprint) ========================================================================================
+ 
+Setup d Bldpln^%zprd("%zprd11") q
+ 
+ASetup ; after setup form is build
+ d ^%z("%gui.cpt","Intens","value="_$g(@$p(%prd,%d,5)@("Intens"),4))
+ d ^%z("%gui.cpt","bSensor","title="_$$^%z("%str.trl","calibrate sensor","uc1\app=sys\program=%zprd"))
+ d ^%z("%gui.event","..bSensor","ONSELECTLEFT=d ^%z(""%prd.sensor"",$g(Printc),""openclose"")")
+ d ^%z("%gui.event","..bKillIma","ONSELECTLEFT=d bKillIma^%zprd11")
+ d ^%z("%gui.cpt","bKillIma","title="_$$^%z("%str.trl","reset images","uc1\app=sys\program=%zprd10"))
+ d ^%z("%gui.cpt","bDrawer","title="_$$^%z("%str.trl","open drawer","uc1\app=sys\program=%zprd"))
+ d ^%z("%gui.event","..bDrawer","ONSELECTLEFT=d ^%z(""%prd.fire"",$g(Printc))")
+ d ^%z("%gui.cpt","bFeed","title=Feed")
+ d ^%z("%gui.event","..bFeed","ONSELECTLEFT=d ^%z(""%prd.feed"",$g(Printc))")
+ d ^%z("%gui.event","..Waits","ONCHANGE=d Waits^%zprd6"),^%z("%gui.cpt","WaitTO","enabled="_$g(Waits)_"\minvalue=0")
+ q
+ 
+SSetup ; save
+ i $g(@$p(%prd,%d,5)@("Intens"),4)'=Intens s @$p(%prd,%d,5)@("Intens")=Intens,@$p(%prd,%d,5)@("NewInt")=1
+ q
+ 
+bKillIma ; button - bKillIma - ONSELECTLEFT
+ k @$p(%prd,%d,5)@("images")
+ d msg^%z("buffer cleared")
+ q
+ 
+%Ok g %Ok^%zprd
+ 
+callWS(method,parameters)
+ s ws=##class(SDP.WSClient).%New()
+ s res=ws.Get(%prnServer,%prnPort,method,$g(parameters)) w method," ",$g(parameters)," ",res,! zw res w !
+ s ^posfwlog($$hor^%z(),$zh,method)=res
+ q res
+ 
+Bldfrm ; name\type\x,#char,h\auto?\1=client 2=server 0=both\default\title\items
+ ;; Server\text\160,15,25\1\0\\server IP
+ ;; Port\text\160,4,25\1\0\\port
+ ;; Intens\combobox\160,15,25\0\0\4\intensity\0-0 (light)\1-1\2-2\3-3\4-4 (normal)\5-5\6-6\7-7\8-8 (dark)
+ ;; Label\combobox\160,15,25\1\0\0\paper type\0-labels\2-roll
+ ;; Cutmode\combobox\160,30,25\1\0\0\cut mode\0-never\1-partial cut\2-full cut
+ ;; Waits\checkbox\160,2,25\1\0\0\wait for take off label
+ ;; WaitTO\number\160,3,25\1\0\\time-out wait (sec)
+ ;; bKillIma\button\160,30,25\0\0\0\\
+ ;; bSensor\button\160,30,25\0\0\0\
+ ;; bDrawer\button\160,30,25\0\0\0\
+ ;; bFeed\button\160,30,25\0\0\0\
