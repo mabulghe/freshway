@@ -1,4 +1,5 @@
-# FreshWay Gateway
+# freshway
+Freshway service
 
 Gateway C# para sustituir el gateway Java de las impresoras Mettler-Toledo FreshWay. Los backends Java de hardware se mantienen.
 
