@@ -1,44 +1,44 @@
 ---
 title: FreshWay Gateway Service
-subtitle: Guía de instalación, diagnóstico y cambio de gateway — Versión 1.2
-author: Mettler-Toledo FreshWay · Documentación del proyecto
-date: 4 de noviembre de 2026
-lang: es
+subtitle: Installation, Troubleshooting and Gateway Switching Guide — Version 1.2
+author: Mettler-Toledo FreshWay · Project Documentation
+date: November 4, 2026
+lang: en
 geometry: margin=22mm
 fontsize: 10pt
 colorlinks: true
 ---
 
-# Alcance y arquitectura
+# Scope and Architecture
 
-Esta revisión actualiza la guía 1.1: incorpora `UrlSegmentMaxLength`, corrige el nombre del servicio Java a **POSPrinterWS** y documenta cómo alternar entre el gateway Java y el C# para recuperación y pruebas comparativas.
+This revision updates guide 1.1: it adds `UrlSegmentMaxLength`, corrects the Java service name to **POSPrinterWS**, and documents how to switch between the Java and C# gateways for recovery and comparative testing.
 
-El nuevo servicio reemplaza solamente `gateway.jar` (Spring Boot). Los backends Java siguen siendo necesarios para comunicarse con el hardware mediante JavaPOS, PAL-Service y USB.
+The new service replaces only `gateway.jar` (Spring Boot). The Java backends remain necessary to communicate with the hardware through JavaPOS, PAL-Service and USB.
 
 ```text
-Caché COS (%zprd11) -> HTTP :8082 -> UN gateway activo:
+Cache COS (%zprd11) -> HTTP :8082 -> ONE active gateway:
   Java: POSPrinterWS (gateway.jar)
   C#:   FreshWayGateway (FreshWayGateway.exe)
     -> :8083 MettlerWSV1.1_G.jar (Label / Green)
     -> :8084 MettlerWSV1.1_B.jar (Receipt / Linerless / Blue)
-    -> JavaPOS -> PAL-Service -> USB -> impresora FreshWay
+    -> JavaPOS -> PAL-Service -> USB -> FreshWay printer
 ```
 
-Ambos gateways utilizan el mismo puerto y las mismas rutas. No pueden estar activos simultáneamente en ese puerto. Caché no requiere cambios de código para alternarlos. Los puertos indicados son valores habituales: verificar los reales de cada instalación.
+Both gateways use the same port and routes. They cannot run simultaneously on that port. Cache requires no code changes to switch between them. The ports shown are typical values: verify the actual ports on each installation.
 
-La ubicación habitual del servicio anterior y sus wrappers WinSW es:
+The previous service and its WinSW wrappers are usually located at:
 
 ```text
 D:\sdppc\RestService\Mettler Driver gateway\
 ```
 
-**Correspondencia con el código adjunto.** `FreshWayGateway.cs` conserva su identificación interna v1.0 y ya utiliza `ctx.Request.RawUrl`. No contiene el filtro de `JposException` que describía la guía anterior: no asumir esa función ni interpretar una respuesta vacía como éxito. Esta revisión modifica documentación, no el código del servicio. Las mejoras de latencia citadas en la guía original no se han vuelto a medir.
+**Correspondence with the supplied source.** `FreshWayGateway.cs` retains its internal v1.0 identification and already uses `ctx.Request.RawUrl`. It does not contain the `JposException` filter described in the previous guide: do not assume that feature is present or interpret an empty response as success. This revision changes documentation, not service code. The latency improvements cited in the original guide have not been measured again.
 
-# Preparación y comprobaciones iniciales
+# Preparation and Initial Checks
 
-Ejecutar los comandos en **CMD como administrador**. Si se utiliza PowerShell, escribir `sc.exe` para evitar el alias `sc`. Programar una pausa de impresión y el reinicio de Windows requerido por la configuración de HTTP.sys.
+Run commands in **CMD as Administrator**. When using PowerShell, type `sc.exe` to avoid the `sc` alias. Schedule a printing pause and the Windows restart required by the HTTP.sys configuration.
 
-Antes de modificar la instalación, registrar los tipos de inicio y las rutas de los servicios:
+Before changing the installation, record service startup types and executable paths:
 
 ```bat
 sc.exe qc POSPrinterWS
@@ -51,16 +51,16 @@ wmic process where "name='java.exe'" get ProcessId,CommandLine
 netstat -ano -p tcp | findstr ":8082"
 ```
 
-Si FreshWayGateway todavía no está instalado, el error 1060 en su consulta es esperado. Si WMIC no está disponible, consultar los procesos con PowerShell:
+If FreshWayGateway is not installed yet, error 1060 when querying it is expected. If WMIC is unavailable, inspect the processes using PowerShell:
 
 ```powershell
 Get-CimInstance Win32_Process -Filter "name='java.exe'" |
   Select-Object ProcessId, CommandLine
 ```
 
-Conservar el EXE, el INI, los JAR, los XML WinSW y los registros previos. No desinstalar **POSPrinterWS**: se necesita para volver al servicio anterior. Confirmar que su `BINARY_PATH_NAME` y configuración corresponden a `gateway.jar`.
+Keep the EXE, INI, JAR files, WinSW XML files and previous logs. Do not uninstall **POSPrinterWS**: it is needed to return to the previous service. Confirm that its `BINARY_PATH_NAME` and configuration correspond to `gateway.jar`.
 
-## Identificación de servicios y backends
+## Identify Services and Backends
 
 ```bat
 type "D:\sdppc\RestService\Mettler Driver gateway\WinSW.NET4.xml" | findstr "<id>"
@@ -68,7 +68,7 @@ type "D:\sdppc\RestService\Mettler Driver gateway\WinSW.G.xml" | findstr "<id>"
 type "D:\sdppc\RestService\Mettler Driver gateway\WinSW.B.xml" | findstr "<id>"
 ```
 
-El nombre del servicio gateway Java de esta instalación es **POSPrinterWS**. Los backends habituales son **Mettler_Driver_G** y **Mettler_Driver_B**; comprobarlos en el equipo. Si solo hay una impresora, puede estar instalado o habilitado únicamente el backend correspondiente. No habilitar módulos inexistentes.
+The Java gateway service name on this installation is **POSPrinterWS**. The usual backend services are **Mettler_Driver_G** and **Mettler_Driver_B**; verify them on the machine. If there is only one printer, only its corresponding backend may be installed or enabled. Do not enable modules that are not present.
 
 ## .NET Framework
 
@@ -76,79 +76,79 @@ El nombre del servicio gateway Java de esta instalación es **POSPrinterWS**. Lo
 reg query "HKLM\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" /v Release
 ```
 
-Se requiere .NET Framework 4.7 o posterior (`Release >= 460798`). La compilación utiliza el compilador del Framework; su carpeta continúa llamándose `v4.0.30319`.
+.NET Framework 4.7 or later is required (`Release >= 460798`). Compilation uses the Framework compiler; its folder is still named `v4.0.30319`.
 
-## Reserva de URL de HTTP.sys
+## HTTP.sys URL Reservation
 
-Consultar primero la reserva existente:
+First check the existing reservation:
 
 ```bat
 netsh http show urlacl url=http://+:8082/
 ```
 
-Si falta, crearla para la cuenta que ejecutará el servicio. Con la configuración predeterminada de servicio LocalSystem:
+If it is missing, create it for the account that will run the service. For the default LocalSystem service configuration:
 
 ```bat
 netsh http add urlacl url=http://+:8082/ user="NT AUTHORITY\SYSTEM"
 ```
 
-Si se usa otra cuenta, reemplazarla por esa cuenta. La guía original concedía acceso a EVERYONE; no es necesario ampliar permisos si la cuenta del servicio ya tiene acceso. Para una prueba de consola, la cuenta que la ejecuta también debe tener permisos; usar CMD elevado. No eliminar reservas existentes sin revisar quién las utiliza.
+If a different account is used, substitute that account. The original guide granted access to EVERYONE; broader permissions are unnecessary if the service account already has access. For a console test, the account running it must also have permission; use an elevated CMD window. Do not delete existing reservations without checking which applications use them.
 
-# Configuración obligatoria de HTTP.sys
+# Required HTTP.sys Configuration
 
-`HttpListener` recibe las solicitudes a través de HTTP.sys. Caché incluye comandos ESC (`%1B`), retornos de carro (`%0D`), LF (`%0A`) y SOH (`%01`) codificados dentro de las rutas de impresión. Además, el texto completo de ingredientes se envía en **un único segmento** después de `/pos/p_printnormal/2/`.
+`HttpListener` receives requests through HTTP.sys. Cache includes encoded ESC commands (`%1B`), carriage returns (`%0D`), LF (`%0A`) and SOH (`%01`) in print paths. In addition, the entire ingredients text is sent in **a single segment** after `/pos/p_printnormal/2/`.
 
-Estas configuraciones son globales para HTTP.sys en el equipo, no exclusivas de FreshWayGateway. Registrar los valores originales —incluido si no existían— antes de cambiarlos:
+These settings apply globally to HTTP.sys on the machine, not just to FreshWayGateway. Record the original values, including whether they were absent, before changing them:
 
 ```bat
 reg query "HKLM\SYSTEM\CurrentControlSet\Services\HTTP\Parameters" /v AllowRestrictedChars
 reg query "HKLM\SYSTEM\CurrentControlSet\Services\HTTP\Parameters" /v UrlSegmentMaxLength
 ```
 
-## Permitir caracteres restringidos codificados
+## Allow Encoded Restricted Characters
 
 ```bat
 reg add "HKLM\SYSTEM\CurrentControlSet\Services\HTTP\Parameters" ^
   /v AllowRestrictedChars /t REG_DWORD /d 1 /f
 ```
 
-Este ajuste permite caracteres restringidos codificados que necesita el protocolo existente. No sustituye los límites de longitud.
+This setting allows the encoded restricted characters required by the existing protocol. It does not override length limits.
 
-## Ampliar el largo máximo de un segmento de URL
+## Increase the Maximum URL Segment Length
 
-El valor predeterminado de `UrlSegmentMaxLength` es 260 caracteres. Los ingredientes extensos pueden superarlo aunque sus líneas estén separadas con `%0D`: los retornos de carro no crean nuevos segmentos de URL.
+The default `UrlSegmentMaxLength` value is 260 characters. Long ingredients text can exceed it even when lines are separated by `%0D`: carriage returns do not create new URL segments.
 
-Para esta instalación se establece un límite de 4096:
+For this installation, set a limit of 4096:
 
 ```bat
 reg add "HKLM\SYSTEM\CurrentControlSet\Services\HTTP\Parameters" ^
   /v UrlSegmentMaxLength /t REG_DWORD /d 4096 /f
 ```
 
-Si ya existe un valor superior por requerimiento de otra aplicación, conservarlo y documentarlo en lugar de reducirlo. Este parámetro no amplía otros límites de longitud de solicitud. Si la etiqueta más extensa continúa fallando, investigar el rechazo concreto antes de modificar otros límites.
+If a higher value already exists because another application requires it, retain and document it rather than reducing it. This parameter does not increase other request length limits. If the longest label still fails, investigate the specific rejection before changing other limits.
 
-## Reiniciar y verificar
+## Restart and Verify
 
-Aplicar ambos ajustes en una misma ventana de mantenimiento. Antes del reinicio, asegurar que solo el gateway elegido tenga inicio automático; la sección de cambio de gateway explica cómo hacerlo. Reiniciar Windows de forma controlada:
+Apply both settings in the same maintenance window. Before restarting, ensure that only the selected gateway has automatic startup enabled; the gateway switching section explains how. Perform a controlled Windows restart:
 
 ```bat
 shutdown /r /t 60
 ```
 
-Guardar el trabajo antes de ejecutar el comando. Después del reinicio:
+Save your work before running the command. After the restart:
 
 ```bat
 reg query "HKLM\SYSTEM\CurrentControlSet\Services\HTTP\Parameters" /v AllowRestrictedChars
 reg query "HKLM\SYSTEM\CurrentControlSet\Services\HTTP\Parameters" /v UrlSegmentMaxLength
 ```
 
-Esperado: `AllowRestrictedChars = 0x1` y `UrlSegmentMaxLength = 0x1000` (4096 decimal), o el límite superior previamente conservado. Reiniciar únicamente el servicio C# no aplica estos ajustes del kernel.
+Expected: `AllowRestrictedChars = 0x1` and `UrlSegmentMaxLength = 0x1000` (4096 decimal), or the higher limit retained earlier. Restarting only the C# service does not apply these kernel settings.
 
-# Compilación e instalación del gateway C#
+# Compile and Install the C# Gateway
 
-## Preparar y compilar
+## Prepare and Compile
 
-Copiar el fuente y el INI a la carpeta de trabajo:
+Copy the source and INI file to the working folder:
 
 ```bat
 mkdir C:\FreshwayPrinterService
@@ -159,69 +159,69 @@ cd /d C:\FreshwayPrinterService
   /out:FreshWayGateway.exe FreshWayGateway.cs
 ```
 
-La compilación debe finalizar sin errores. Si ya existe un servicio C# activo, detenerlo y esperar `STOPPED` antes de reemplazar su ejecutable. Editar el `.cs` no modifica el binario desplegado: recompilar, copiar el EXE y reiniciar el servicio después de cualquier cambio de código.
+Compilation must finish without errors. If an existing C# service is running, stop it and wait for `STOPPED` before replacing its executable. Editing the `.cs` file does not change the deployed binary: recompile, copy the EXE and restart the service after any code change.
 
-## Configurar gateway.ini
+## Configure gateway.ini
 
-Debe estar junto al EXE. Usar comentarios en líneas separadas: el parser adjunto no interpreta comentarios después de los valores numéricos.
+The file must be next to the EXE. Place comments on separate lines: the supplied parser does not interpret comments after numeric values.
 
 ```ini
-; Puerto que utiliza Cache
+; Port used by Cache
 port=8082
-; Backend Label / Green
+; Label / Green backend
 port_green=8083
-; Backend Receipt / Linerless / Blue
+; Receipt / Linerless / Blue backend
 port_blue=8084
 backend_timeout=30000
 ```
 
-Verificar los puertos con las líneas de comando de los JAR y con la configuración de impresora de Caché. No cambiar el puerto de Caché entre pruebas comparativas si ambos gateways escuchan en 8082.
+Verify the ports against the JAR command lines and the Cache printer configuration. Do not change the Cache port between comparative tests if both gateways listen on 8082.
 
-## Registrar el servicio C# sin iniciarlo todavía
+## Register the C# Service Without Starting It Yet
 
-Si no existe:
+If the service does not exist:
 
 ```bat
 sc.exe create FreshWayGateway ^
   binPath= "C:\FreshwayPrinterService\FreshWayGateway.exe" ^
   DisplayName= "FreshWay Gateway Service" ^
   start= demand
-sc.exe description FreshWayGateway "Gateway HTTP C# para impresoras FreshWay"
+sc.exe description FreshWayGateway "C# HTTP gateway for FreshWay printers"
 sc.exe failure FreshWayGateway reset= 60 actions= restart/5000/restart/10000/restart/30000
 ```
 
-Si ya existe, comprobar `sc.exe qc FreshWayGateway` y su ruta en lugar de volver a crearlo. Mantenerlo detenido hasta liberar 8082. Aplicar los ajustes de HTTP.sys y realizar el reinicio previsto antes de validar ingredientes.
+If it already exists, check `sc.exe qc FreshWayGateway` and its path instead of creating it again. Keep it stopped until port 8082 is free. Apply the HTTP.sys settings and perform the scheduled restart before validating ingredients printing.
 
-# Alternar entre el servicio nuevo y el anterior
+# Switch Between the New and Previous Services
 
-Esta sección sirve tanto para recuperar la impresión como para comparar resultados. Mantener los backends necesarios ejecutándose durante ambos modos. No detener PAL-Service ni los servicios G/B para cambiar únicamente de gateway.
+Use this section both to restore printing and to compare results. Keep the required backends running in both modes. Do not stop PAL-Service or the G/B services when changing only the gateway.
 
-## Reglas antes de cada cambio
+## Rules Before Every Switch
 
-1. Pausar nuevos trabajos de Caché y dejar finalizar la impresión en curso. Conservar la etiqueta de prueba y los logs. No cambiar de gateway a mitad de una transacción.
-2. Registrar qué servicio está activo y su tipo de inicio con `sc.exe query` y `sc.exe qc`.
-3. Detener el gateway saliente y esperar realmente `STATE : 1 STOPPED`. `sc.exe stop` es asíncrono; repetir la consulta mientras esté `STOP_PENDING`. No continuar si no se detiene.
-4. Si FreshWayGateway se ejecuta con `--console`, detener también esa instancia con Enter en su consola. Detener el servicio no detiene una instancia de consola separada.
-5. Comprobar el puerto antes de iniciar el otro gateway:
+1. Pause new Cache jobs and allow the current print job to finish. Keep the test label and logs. Do not switch gateways in the middle of a transaction.
+2. Record which service is active and its startup type using `sc.exe query` and `sc.exe qc`.
+3. Stop the outgoing gateway and actually wait for `STATE : 1 STOPPED`. `sc.exe stop` is asynchronous; repeat the query while it reports `STOP_PENDING`. Do not proceed if it does not stop.
+4. If FreshWayGateway is running with `--console`, also stop that instance by pressing Enter in its console. Stopping the service does not stop a separate console instance.
+5. Check the port before starting the other gateway:
 
 ```bat
 netstat -ano -p tcp | findstr ":8082"
 ```
 
-No debe existir un listener en el puerto local 8082. Las conexiones `TIME_WAIT` no son listeners. Identificar un PID inesperado con `tasklist /fi "PID eq NUMERO"`; HTTP.sys puede aparecer como PID 4. En ese caso consultar `netsh http show servicestate` para identificar la aplicación registrada: no intentar terminar el proceso System.
+There must be no listener on local port 8082. `TIME_WAIT` connections are not listeners. Identify an unexpected PID with `tasklist /fi "PID eq NUMBER"`; HTTP.sys may appear as PID 4. In that case, use `netsh http show servicestate` to identify the registered application: do not attempt to terminate the System process.
 
-## Volver al servicio anterior: C# -> Java (POSPrinterWS)
+## Return to the Previous Service: C# -> Java (POSPrinterWS)
 
-Ejecutar por etapas, verificando cada estado:
+Run these steps in stages, checking each state:
 
 ```bat
-REM Evitar que C# vuelva a iniciarse al reiniciar Windows
+REM Prevent C# from starting again when Windows restarts
 sc.exe config FreshWayGateway start= disabled
 sc.exe stop FreshWayGateway
 sc.exe query FreshWayGateway
 ```
 
-Esperar `STOPPED`, detener cualquier consola C# y comprobar que 8082 quedó libre según el procedimiento anterior. Luego:
+Wait for `STOPPED`, stop any C# console instance, and verify that 8082 is free using the procedure above. Then:
 
 ```bat
 sc.exe config POSPrinterWS start= auto
@@ -230,19 +230,19 @@ sc.exe query POSPrinterWS
 sc.exe qc POSPrinterWS
 ```
 
-Esperar `RUNNING`; el gateway Spring Boot puede tardar varios segundos adicionales en escuchar. Confirmar listener en 8082, backends necesarios en `RUNNING` y proceso `gateway.jar` activo. La configuración estable de este modo es:
+Wait for `RUNNING`; the Spring Boot gateway may need several additional seconds before it starts listening. Confirm a listener on 8082, the required backends in `RUNNING`, and an active `gateway.jar` process. The stable configuration for this mode is:
 
-- **POSPrinterWS:** automático y ejecutándose.
-- **FreshWayGateway:** deshabilitado y detenido, sin instancia de consola.
-- **Mettler_Driver_G / Mettler_Driver_B:** sin cambios, según hardware instalado.
+- **POSPrinterWS:** automatic and running.
+- **FreshWayGateway:** disabled and stopped, with no console instance.
+- **Mettler_Driver_G / Mettler_Driver_B:** unchanged, according to installed hardware.
 
-Reanudar con una impresión completa desde Caché: una etiqueta corta y la misma etiqueta extensa de ingredientes. Verificar contenido, saltos de línea, código de barras y avance/corte. No basta con que el servicio esté `RUNNING`. Si hay estado residual del intento fallido, cerrar y reinicializar la sesión de impresora desde el flujo normal de Caché antes de comparar.
+Resume with a complete print job from Cache: a short label and the same long ingredients label. Verify content, line breaks, barcode and paper feed/cut. A service reporting `RUNNING` is not enough. If the failed attempt left residual state, close and reinitialize the printer session through the normal Cache workflow before comparing results.
 
-No es necesario eliminar el EXE nuevo, desinstalar el servicio C#, quitar la reserva de URL ni revertir HTTP.sys para volver a Java. Mantener esos ajustes facilita alternar nuevamente.
+There is no need to remove the new EXE, uninstall the C# service, remove the URL reservation or revert HTTP.sys to return to Java. Keeping these settings makes it easier to switch back again.
 
-## Volver al servicio nuevo: Java -> C# (FreshWayGateway)
+## Return to the New Service: Java -> C# (FreshWayGateway)
 
-Con la impresión pausada:
+With printing paused:
 
 ```bat
 sc.exe config POSPrinterWS start= disabled
@@ -250,7 +250,7 @@ sc.exe stop POSPrinterWS
 sc.exe query POSPrinterWS
 ```
 
-Esperar `STOPPED` y puerto 8082 libre. Confirmar que HTTP.sys ya fue configurado y Windows reiniciado. Luego:
+Wait for `STOPPED` and for port 8082 to be free. Confirm that HTTP.sys has already been configured and Windows restarted. Then:
 
 ```bat
 sc.exe config FreshWayGateway start= auto
@@ -259,17 +259,17 @@ sc.exe query FreshWayGateway
 sc.exe qc FreshWayGateway
 ```
 
-Esperar `RUNNING`, comprobar listener y backends, y repetir las mismas impresiones completas desde Caché. La configuración estable de este modo es:
+Wait for `RUNNING`, check the listener and backends, and repeat the same complete print jobs from Cache. The stable configuration for this mode is:
 
-- **FreshWayGateway:** automático y ejecutándose.
-- **POSPrinterWS:** deshabilitado y detenido.
-- **Backends G/B:** sin cambios.
+- **FreshWayGateway:** automatic and running.
+- **POSPrinterWS:** disabled and stopped.
+- **G/B backends:** unchanged.
 
-Si C# falla al iniciar o imprimir, conservar el error y ejecutar la sección de retorno a POSPrinterWS. No iniciar ambos servicios para intentar recuperar el puerto.
+If C# fails to start or print, keep the error details and follow the return-to-POSPrinterWS procedure. Do not start both services in an attempt to recover the port.
 
-## Prueba temporal del C# en consola
+## Temporary C# Console Test
 
-Detener y deshabilitar POSPrinterWS y detener el servicio FreshWayGateway; esperar ambos detenidos y 8082 libre. Mantener el servicio C# en inicio manual durante la prueba:
+Stop and disable POSPrinterWS and stop the FreshWayGateway service; wait until both are stopped and 8082 is free. Keep the C# service set to manual startup during the test:
 
 ```bat
 sc.exe config FreshWayGateway start= demand
@@ -277,19 +277,19 @@ cd /d C:\FreshwayPrinterService
 FreshWayGateway.exe --console
 ```
 
-Observar solicitudes mientras Caché imprime. Al terminar, pulsar Enter, verificar que el puerto se liberó y elegir uno de los dos procedimientos anteriores para dejar un único servicio automático. No dejar una prueba de consola como configuración permanente.
+Watch requests while Cache prints. When finished, press Enter, verify that the port has been released, and choose one of the two procedures above to leave only one service set to automatic startup. Do not leave a console test as the permanent configuration.
 
-## Registro de pruebas comparativas
+## Record Comparative Tests
 
-Utilizar el mismo producto, texto completo, diseño, impresora, backends y configuración de Caché. Ejecutar los trabajos secuencialmente, nunca de manera simultánea.
+Use the same product, complete text, layout, printer, backends and Cache configuration. Run jobs sequentially, never simultaneously.
 
-Registrar por gateway: fecha/hora, binario desplegado, puertos, valores HTTP.sys, resultado de etiqueta corta y extensa, saltos de línea, errores HTTPERR, respuestas de Caché y tiempos observados. Conservar los logs antes de repetir. Si se modificó HTTP.sys entre pruebas, anotarlo: ya no son condiciones idénticas.
+For each gateway, record: date/time, deployed binary, ports, HTTP.sys values, short and long label results, line breaks, HTTPERR errors, Cache responses and observed timings. Keep logs before repeating a test. If HTTP.sys was changed between tests, record it: the conditions are no longer identical.
 
-## Restauración opcional de HTTP.sys
+## Optional HTTP.sys Restoration
 
-No forma parte del cambio normal de gateway. Si se retira definitivamente el gateway C# y se decide restaurar HTTP.sys, revisar primero el impacto en otras aplicaciones y utilizar exactamente los valores registrados antes de la instalación. Si un valor no existía, eliminar únicamente ese valor; si existía, restaurar su dato y tipo original. No importar indiscriminadamente toda la rama del registro. Programar otro reinicio de Windows para aplicar la restauración.
+This is not part of a normal gateway switch. If the C# gateway is permanently removed and HTTP.sys restoration is required, first review the impact on other applications and use exactly the values recorded before installation. If a value did not exist, delete only that value; if it existed, restore its original data and type. Do not indiscriminately import the entire registry branch. Schedule another Windows restart to apply the restoration.
 
-# Validación después de instalar o cambiar de gateway
+# Validate After Installation or a Gateway Switch
 
 ```bat
 sc.exe query POSPrinterWS
@@ -299,66 +299,66 @@ sc.exe query Mettler_Driver_B
 netstat -ano -p tcp | findstr ":8082"
 ```
 
-Debe quedar activo solo el gateway elegido. Un backend ausente por hardware no instalado no es por sí solo un error.
+Only the selected gateway must be active. A backend being absent because its hardware is not installed is not, by itself, an error.
 
-Realizar desde Caché una secuencia completa de apertura, claim, enable, impresión y cierre. Comprobar físicamente una etiqueta corta y la etiqueta extensa que antes producía `400 - URL -`. En modo C#, el `p_printnormal` extenso debe llegar al log del gateway y no generar un nuevo rechazo HTTPERR. Confirmar los CR internos y los caracteres acentuados; no sustituir `$c(13)` por `$c(10)` para ocultar un rechazo HTTP.
+Run a complete open, claim, enable, print and close sequence from Cache. Physically inspect a short label and the long label that previously produced `400 - URL -`. In C# mode, the long `p_printnormal` request must reach the gateway log without generating a new HTTPERR rejection. Confirm internal CR characters and accented characters; do not replace `$c(13)` with `$c(10)` to hide an HTTP rejection.
 
-Una llamada aislada a `p_open` solo valida apertura: puede cambiar el estado o la ruta activa del gateway y no demuestra que la impresión completa funcione. Evitar mezclar pruebas manuales con trabajos reales.
+An isolated `p_open` call only validates opening: it can change the gateway's state or active route and does not demonstrate that a complete print job works. Avoid mixing manual tests with production jobs.
 
-# Configuración por tipo de impresora
+# Configuration by Printer Type
 
-| Dispositivo de p_open | Puerto predeterminado | Backend |
+| p_open device | Default port | Backend |
 |---|---:|---|
 | LabelPrinter-1 | 8083 | Green |
-| LabelPrinter-1-Sim | 8083 | Green, simulador |
+| LabelPrinter-1-Sim | 8083 | Green, simulator |
 | ReceiptPrinter-1 | 8084 | Blue |
 | LinerlessPrinter-1 | 8084 | Blue |
 
-En Caché: MTA#1 corresponde a Receipt, MTA#2 a Label y MTA#3 a Linerless. Configurar únicamente los dispositivos presentes y verificar sus entradas `jpos.xml`. No redirigir una impresora inexistente a otro backend como sustituto de su instalación.
+In Cache: MTA#1 corresponds to Receipt, MTA#2 to Label and MTA#3 to Linerless. Configure only devices that are present and verify their `jpos.xml` entries. Do not redirect a nonexistent printer to another backend as a substitute for installing it.
 
-Para agregar Label o Linerless, verificar módulo físico, alimentación y paquetes UPOS correspondientes. Para Label, revisar el paquete FLP y su registro:
+To add Label or Linerless, verify the physical module, power supply and corresponding UPOS packages. For Label, check the FLP package and its registration:
 
 ```bat
 reg query "HKLM\SOFTWARE\OLEforRetail\ServiceOPOS\POSPrinter" /s
 ```
 
-Confirmar `LabelPrinter-1` en la configuración apropiada; para Linerless confirmar `LinerlessPrinter-1` en el backend FP. Habilitar Green para Label o Blue para Receipt/Linerless según la tabla. Conservar los puertos reales en `gateway.ini`.
+Confirm `LabelPrinter-1` in the appropriate configuration; for Linerless, confirm `LinerlessPrinter-1` in the FP backend. Enable Green for Label or Blue for Receipt/Linerless according to the table. Keep the actual ports in `gateway.ini`.
 
-Si el driver USB fue reinstalado o eliminado, seguir el procedimiento del instalador Mettler y los INF específicos del hardware. La guía original menciona `LabelPrinterFLP2.inf` para VID_0EB8/PID_300C y `LabelPrinterFLP01.inf` para PID_3014; verificar modelo y paquete antes de instalarlos. No reinstalar drivers para diagnosticar un `400 - URL -`, que ocurre antes de acceder al hardware.
+If the USB driver was reinstalled or removed, follow the Mettler installer procedure and use the INF files specific to the hardware. The original guide mentions `LabelPrinterFLP2.inf` for VID_0EB8/PID_300C and `LabelPrinterFLP01.inf` for PID_3014; verify the model and package before installing them. Do not reinstall drivers to diagnose `400 - URL -`, which occurs before hardware access.
 
-# Diagnóstico
+# Troubleshooting
 
-## HTTPERR: 400 - URL - sin entrada en el gateway C#
+## HTTPERR: 400 - URL - With No C# Gateway Log Entry
 
 ```text
 C:\Windows\System32\LogFiles\HTTPERR\httperr*.log
 ```
 
-HTTP.sys rechazó la solicitud antes de `Handle`. Revisar `AllowRestrictedChars`, `UrlSegmentMaxLength` y el reinicio posterior. En la solicitud de ingredientes observada hay `%1B`, varios `%0D` y un segmento superior al límite predeterminado. El motivo genérico `URL` no distingue por sí solo entre todas las validaciones: confirmar con la misma etiqueta después de aplicar los ajustes.
+HTTP.sys rejected the request before `Handle`. Check `AllowRestrictedChars`, `UrlSegmentMaxLength` and the subsequent restart. The observed ingredients request contains `%1B`, several `%0D` sequences and a segment exceeding the default limit. The generic `URL` reason alone does not distinguish between all validations: confirm using the same label after applying the settings.
 
-## La solicitud sí aparece en el gateway, pero no imprime
+## The Request Appears in the Gateway Log but Does Not Print
 
-Revisar puertos, procesos Java, respuestas completas y logs del backend. El C# adjunto utiliza RawUrl, pero al crear la solicitud saliente también interviene el procesamiento de URI de .NET. Verificar lo que recibe Java antes de atribuir automáticamente cualquier error a una versión antigua.
+Check ports, Java processes, complete responses and backend logs. The supplied C# source uses RawUrl, but .NET URI processing also takes place when creating the outgoing request. Verify what Java receives before automatically attributing every error to an outdated version.
 
-El código adjunto no propaga el estado HTTP del backend al cliente y recorta los mensajes de consola. Un error de Java puede llegar a Caché como HTTP 200 con un cuerpo de error o vacío. No tomar HTTP 200 ni ausencia de texto como prueba de impresión exitosa; conservar los logs del backend. Una mejora de manejo de errores corresponde a una revisión de código separada.
+The supplied code does not propagate the backend HTTP status to the client and truncates console messages. A Java error may reach Cache as HTTP 200 with an error body or an empty body. Do not treat HTTP 200 or absent text as proof of successful printing; keep the backend logs. Improving error handling requires a separate code revision.
 
-## Puerto ocupado o servicio que no arranca
+## Port Busy or Service Fails to Start
 
-Comprobar que el otro gateway y cualquier instancia `--console` estén detenidos. Revisar `sc.exe qc`, ruta del EXE, reserva URL, cuenta de servicio y eventos de Windows. Esperar `STOPPED` antes de iniciar el reemplazo. Si POSPrinterWS no inicia al regresar, revisar los logs de su wrapper WinSW, su Java y su configuración original.
+Check that the other gateway and any `--console` instance are stopped. Review `sc.exe qc`, the EXE path, URL reservation, service account and Windows events. Wait for `STOPPED` before starting the replacement. If POSPrinterWS fails to start when switching back, check its WinSW wrapper logs, Java runtime and original configuration.
 
-## Conexión rechazada al backend
+## Backend Connection Refused
 
-Confirmar que el backend del dispositivo está instalado, en `RUNNING` y escuchando en el puerto configurado. Mantener Green/Blue activos al alternar gateways; no cambiar drivers USB por un error de conexión HTTP.
+Confirm that the device's backend is installed, in `RUNNING`, and listening on the configured port. Keep Green/Blue active when switching gateways; do not change USB drivers because of an HTTP connection error.
 
-## Todas las llamadas parecen correctas pero la etiqueta está vacía
+## All Calls Look Correct but the Label Is Blank
 
-Verificar secuencia completa, modo página, estado de la transacción, logs JavaPOS/UPOS y PAL-Service. La guía original cita `D:\sdp_mta_prn_SCA01.txt`; confirmar la ruta real del equipo. Comparar con POSPrinterWS usando exactamente el mismo diseño y producto.
+Check the complete sequence, page mode, transaction state, JavaPOS/UPOS logs and PAL-Service. The original guide cites `D:\sdp_mta_prn_SCA01.txt`; confirm the actual path on the machine. Compare with POSPrinterWS using exactly the same layout and product.
 
-En Caché, consultar `zw ^posfwlog` y conservar su contenido antes de limpiar o repetir. No borrar los logs como paso de instalación.
+In Cache, inspect `zw ^posfwlog` and keep its contents before clearing or repeating tests. Do not delete logs as an installation step.
 
-# Historial y archivos
+# Revision History and Files
 
-- **1.2 — 4 de noviembre de 2026:** UrlSegmentMaxLength=4096, servicio Java POSPrinterWS, retorno completo a Java, reactivación de C#, pruebas comparativas y validación de ingredientes. Se aclaran diferencias entre fuente y guía 1.1 y se corrige el ejemplo de INI para evitar comentarios inline.
-- **1.1 — documento original:** RawUrl y requisito AllowRestrictedChars. El filtro de excepciones mencionado allí no está implementado en el fuente adjunto.
+- **1.2 — November 4, 2026:** UrlSegmentMaxLength=4096, Java service POSPrinterWS, complete return-to-Java procedure, C# reactivation, comparative testing and ingredients validation. Clarifies differences between the source and guide 1.1 and corrects the INI example to avoid inline comments. This edition is in English, matching the original guide.
+- **1.1 — original document:** RawUrl and the AllowRestrictedChars requirement. The exception filter mentioned there is not implemented in the supplied source.
 
-Los cuatro archivos entregados originalmente se conservan sin modificar en el repositorio. El PDF original es histórico y puede contener nombres anteriores; para nuevas instalaciones utilizar esta revisión 1.2. El Markdown de esta revisión es la fuente editable del nuevo PDF.
+The four originally supplied files are preserved unchanged in the repository. The original PDF is historical and may contain earlier names; use revision 1.2 for new installations. The Markdown for this revision is the editable source of the new PDF.
